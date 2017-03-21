@@ -1,0 +1,78 @@
+#!/bin/bash
+
+function Usage()
+{
+    echo "Usage: $0 <subcommand> <args>"
+    echo "examples:"
+    echo -ne "\t$0 create <container_id or name>\n"
+    echo -ne "\t$0 setnetns <ip/netmask@gateway> <container_id or name>\n"
+    exit 1
+}
+
+function addinterface()
+{
+    PID=$1
+    NSNAME=$2
+    DEVICE_ID=$3
+    LOCALE_DEV="vif$DEVICE_ID"
+    REMOTE_DEV="ins$DEVICE_ID"
+
+    [ ! -d /var/run/netns ] && mkdir -p /var/run/netns
+    if [ -f /var/run/netns/$NSNAME ];then
+        DEST=`readlink /var/run/netns/$NSNAME`
+        if [[ -f $DEST && "$DEST" == "/proc/$PID/ns/net" ]];then
+            echo "vif already created!"
+            exit 2
+        else
+            rm -f /var/run/netns/$NSNAME
+        fi
+    fi
+
+    ln -s /proc/$PID/ns/net /var/run/netns/$NSNAME
+    ip link add name $LOCALE_DEV mtu 1500 type veth peer name $REMOTE_DEV mtu 1454
+    ip link set $LOCALE_DEV up
+
+    ip link set $REMOTE_DEV netns $NSNAME
+    ip netns exec $NSNAME ip link set $REMOTE_DEV name eth1
+    ip netns exec $NSNAME ip link set eth1 up
+    ip netns exec $NSNAME ifconfig lo up
+}
+
+function setipaddress()
+{
+    NETINFO=$2
+    NSNAME=$1
+    DEVICE_ID=$3
+
+    IPWITHLENGTH=`echo $NETINFO| cut -d @ -f1`
+    GATEWAY=`echo $NETINFO| cut -d @ -f2`
+
+    ip netns exec $NSNAME ip address add $IPWITHLENGTH dev eth1
+    ip netns exec $NSNAME ip route replace default via $GATEWAY
+    ip netns exec $NSNAME route add -net 10.0.4.0 netmask 255.255.255.240 gw 172.30.42.1
+}
+
+function main()
+{
+    [[ $# -lt 2 ]] && Usage
+
+    ACTION=$1
+    shift
+    [[ "$ACTION" != "create" && "$ACTION" != "setnetns" ]] && Usage
+
+    container=${!#}
+    PID=`docker inspect --format='{{ .State.Pid}}' $container`
+    ID=`docker inspect --format='{{ .Id}}' $container`
+    [[ -z "$PID" || -z "$ID" ]] && Usage
+    NSNAME=$ID
+    DEVICE_ID=${ID:0:12}
+
+    if [[ "$ACTION" == "create" ]];then
+        addinterface $PID $NSNAME $DEVICE_ID
+    elif [[ "$ACTION" == "setnetns" ]];then
+        NETINFO=$1
+        setipaddress $NSNAME $NETINFO $DEVICE_ID
+    fi
+}
+
+main $@
