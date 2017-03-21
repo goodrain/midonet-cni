@@ -1,0 +1,5 @@
+gr-midonet-cni (0.0.1) unstable; urgency=low
+
+  * Initial Release.
+
+   -- root <root@goodrain.com>  Wed, 11 May 2016 11:17:17 +0800

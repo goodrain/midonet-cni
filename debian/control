@@ -1,0 +1,12 @@
+Source: gr-midonet-cni
+Priority: optional
+Maintainer: root <root@goodrain.com>
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.4
+Section: utils
+Homepage: http://www.goodrain.com
+
+Package: gr-midonet-cni
+Section: utils
+Architecture: linux-any
+Description: goodrain midonet-cni
