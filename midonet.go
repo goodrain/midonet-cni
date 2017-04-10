@@ -32,7 +32,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err := json.Unmarshal(args.StdinData, options); err != nil {
 		return fmt.Errorf("Failed to parse config: %v", err)
 	}
-	options.Default()
+	if err := options.Default(); err != nil {
+		return err
+	}
 	options.SetLog()
 	log := logrus.WithFields(logrus.Fields{"container_id": args.ContainerID})
 	log.Debug("Configuring pod networking.")

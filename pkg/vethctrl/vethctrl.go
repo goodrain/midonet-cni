@@ -159,6 +159,13 @@ func (v *InnerVethCtrl) DoNetworking(args *skel.CmdArgs, conf *conf.Options, res
 	}
 
 	// 做一个软连接便于调试
+	_, err := os.Stat("/var/run/netns/")
+	if err != nil && os.IsNotExist(err) {
+		err := os.MkdirAll("/var/run/netns/", os.ModeDir)
+		if err != nil {
+			v.log.Warnf("create dir /var/run/netns/ error", err.Error())
+		}
+	}
 	err = os.Symlink(args.Netns, "/var/run/netns/"+args.ContainerID[:min(12, len(args.ContainerID))])
 	if err != nil {
 		v.log.Warnf("create link error. source file:%s,target file:%s", args.Netns, "/var/run/netns/"+args.ContainerID[:min(12, len(args.ContainerID))])
