@@ -17,8 +17,8 @@
 # 构建安装
 
 ```
-go get github.com/barnettzqg/midonet-cni
-cd $GOPATH/src/github.com/barnettzqg/midonet-cni
+go get github.com/goodrain/midonet-cni
+cd $GOPATH/src/github.com/goodrain/midonet-cni
 go build -o midonet-cni
 cp midonet-cni /opt/cni/bin/midonet-cni
 ```

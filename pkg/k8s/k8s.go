@@ -14,14 +14,14 @@ import (
 	"github.com/Sirupsen/logrus"
 	midonetclient "github.com/barnettzqg/golang-midonetclient/midonet"
 	midonettypes "github.com/barnettzqg/golang-midonetclient/types"
-	"github.com/barnettzqg/midonet-cni/pkg/etcd"
-	"github.com/barnettzqg/midonet-cni/pkg/ipam"
-	"github.com/barnettzqg/midonet-cni/pkg/midonet"
-	conf "github.com/barnettzqg/midonet-cni/pkg/types"
-	"github.com/barnettzqg/midonet-cni/pkg/vethctrl"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/coreos/etcd/client"
+	"github.com/goodrain/midonet-cni/pkg/etcd"
+	"github.com/goodrain/midonet-cni/pkg/ipam"
+	"github.com/goodrain/midonet-cni/pkg/midonet"
+	conf "github.com/goodrain/midonet-cni/pkg/types"
+	"github.com/goodrain/midonet-cni/pkg/vethctrl"
 )
 
 // CmdAddK8s k8s cni

@@ -6,11 +6,11 @@ import (
 	"os"
 
 	"github.com/Sirupsen/logrus"
-	conf "github.com/barnettzqg/midonet-cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
+	conf "github.com/goodrain/midonet-cni/pkg/types"
 	"github.com/vishvananda/netlink"
 )
 

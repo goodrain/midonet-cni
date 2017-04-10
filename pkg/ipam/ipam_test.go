@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	midonettypes "github.com/barnettzqg/golang-midonetclient/types"
-	"github.com/barnettzqg/midonet-cni/pkg/types"
+	"github.com/goodrain/midonet-cni/pkg/types"
 )
 
 func TestGetRouterIP(t *testing.T) {

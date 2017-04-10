@@ -9,8 +9,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/barnettzqg/midonet-cni/pkg/types"
 	"github.com/coreos/etcd/client"
+	"github.com/goodrain/midonet-cni/pkg/types"
 )
 
 //CreateETCDClient 创建etcd客户端

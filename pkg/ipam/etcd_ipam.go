@@ -11,10 +11,10 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	midonettypes "github.com/barnettzqg/golang-midonetclient/types"
-	"github.com/barnettzqg/midonet-cni/pkg/etcd"
-	"github.com/barnettzqg/midonet-cni/pkg/types"
-	"github.com/barnettzqg/midonet-cni/pkg/util"
 	"github.com/coreos/etcd/client"
+	"github.com/goodrain/midonet-cni/pkg/etcd"
+	"github.com/goodrain/midonet-cni/pkg/types"
+	"github.com/goodrain/midonet-cni/pkg/util"
 )
 
 //EtcdIpam 基于etcd的IP管理

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/barnettzqg/midonet-cni/pkg/types"
+	"github.com/goodrain/midonet-cni/pkg/types"
 )
 
 //RegionAPI regin api

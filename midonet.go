@@ -8,11 +8,11 @@ import (
 	"runtime"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/barnettzqg/midonet-cni/pkg/k8s"
-	"github.com/barnettzqg/midonet-cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/skel"
 	cni "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/goodrain/midonet-cni/pkg/k8s"
+	"github.com/goodrain/midonet-cni/pkg/types"
 )
 
 var hostname string

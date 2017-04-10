@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	midonettypes "github.com/barnettzqg/golang-midonetclient/types"
-	"github.com/barnettzqg/midonet-cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/goodrain/midonet-cni/pkg/types"
 )
 
 func TestCmdAddK8s(t *testing.T) {

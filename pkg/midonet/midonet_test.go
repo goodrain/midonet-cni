@@ -5,7 +5,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	midonettypes "github.com/barnettzqg/golang-midonetclient/types"
-	"github.com/barnettzqg/midonet-cni/pkg/types"
+	"github.com/goodrain/midonet-cni/pkg/types"
 )
 
 func TestGetTenant(t *testing.T) {

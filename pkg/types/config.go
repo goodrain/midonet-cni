@@ -7,7 +7,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/barnettzqg/golang-midonetclient/types"
-	"github.com/barnettzqg/midonet-cni/pkg/util"
+	"github.com/goodrain/midonet-cni/pkg/util"
 )
 
 // Policy is a struct to hold policy config (which currently happens to also contain some K8s config)
