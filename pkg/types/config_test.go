@@ -15,6 +15,8 @@ func TestDefault(t *testing.T) {
 	client.NewKeysAPI(c).Set(context.Background(), "/midonet-cni/config/midonet-api", value, nil)
 	kubeValue := `{"k8s_api_root": "http://127.0.0.1:8080", "kubeconfig": "", "node_name": "tree01"}`
 	client.NewKeysAPI(c).Set(context.Background(), "/midonet-cni/config/kubernetes", kubeValue, nil)
+	RouteValue := `[{"net":"10.0.4.0","netmask":"255.255.255.240","gw":"172.30.42.1"},{"net":"10.0.4.1","netmask":"255.255.255.240","gw":"172.30.42.1"}]`
+	client.NewKeysAPI(c).Set(context.Background(), "/midonet-cni/config/route", RouteValue, nil)
 	option := &Options{
 		ETCDConf: ETCDConf{
 			URLs: []string{"http://192.168.56.101:2379"},
@@ -27,4 +29,5 @@ func TestDefault(t *testing.T) {
 	t.Log(option.MidoNetHostUUID)
 	t.Log(option.MidoNetAPIConf)
 	t.Log(option.Kubernetes)
+	t.Log(option.IPAM.Route)
 }

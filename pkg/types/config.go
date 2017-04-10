@@ -60,12 +60,12 @@ type Options struct {
 
 //IPAM ip管理器配置
 type IPAM struct {
-	Type        string `json:"type"`
-	IPV4        bool   `json:"ipv4"`
-	IPV6        bool   `json:"ipv6"`
-	ReginNetAPI string `json:"region_net_api"`
-	ReginToken  string `json:"region_token"`
-	Route       *Route `json:"route"`
+	Type        string   `json:"type"`
+	IPV4        bool     `json:"ipv4"`
+	IPV6        bool     `json:"ipv6"`
+	ReginNetAPI string   `json:"region_net_api"`
+	ReginToken  string   `json:"region_token"`
+	Route       []*Route `json:"route"`
 }
 
 //Route 路由规则
@@ -192,6 +192,24 @@ func (c *Options) Default() error {
 			return errors.New("Find kubernetes api config from etcd error." + err.Error())
 		}
 		c.Kubernetes = kube
+	}
+	//如果etcd中有定义route，获取它
+	if c.IPAM.Route == nil || len(c.IPAM.Route) == 0 {
+		etcdClient, err := createETCDClient(c.ETCDConf)
+		if err != nil {
+			return err
+		}
+		response, err := client.NewKeysAPI(etcdClient).Get(context.Background(), "/midonet-cni/config/route", &client.GetOptions{})
+		if err != nil {
+			return errors.New("Find midonet api config from etcd error." + err.Error())
+		}
+		value := response.Node.Value
+		var routes []*Route
+		err = json.Unmarshal([]byte(value), &routes)
+		if err != nil {
+			return errors.New("Find midonet api config from etcd error." + err.Error())
+		}
+		c.IPAM.Route = routes
 	}
 	return nil
 }

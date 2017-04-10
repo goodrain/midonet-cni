@@ -107,31 +107,36 @@ func (v *InnerVethCtrl) DoNetworking(args *skel.CmdArgs, conf *conf.Options, res
 			if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &result.IP4.IP}); err != nil {
 				return fmt.Errorf("failed to add IP addr to %q: %v", contVethName, err)
 			}
-
-			if conf.IPAM.Route != nil && conf.IPAM.Route.Net != "" && conf.IPAM.Route.NetMask != "" && conf.IPAM.Route.GW != "" {
-				// 添加一个路由规则，从DstNet来的包从gw出去
-				DstNet := net.ParseIP(conf.IPAM.Route.Net)
-				mask := net.ParseIP(conf.IPAM.Route.NetMask)
-				DstMask := net.IPv4Mask(mask[12], mask[13], mask[14], mask[15])
-				gw := net.ParseIP(conf.IPAM.Route.GW)
-				gwNet := &net.IPNet{IP: DstNet, Mask: DstMask}
-				router := &netlink.Route{
-					Dst: gwNet,
-					Gw:  gw,
-				}
-				v.log.Debug("Add a route ", router)
-				if err = netlink.RouteAdd(router); err != nil {
-					return fmt.Errorf("failed to add route %v", err)
-				}
-			}
+			//添加默认路由
 			_, defNet, _ := net.ParseCIDR("0.0.0.0/0")
 			if err = netlink.RouteDel(&netlink.Route{
 				Dst: defNet,
 			}); err != nil {
-				v.log.Warn("Delete default route error,", err.Error())
+				if err.Error() != "no such process" {
+					v.log.Error("Delete default route error,", err.Error())
+				}
 			}
 			if err = ip.AddDefaultRoute(result.IP4.Gateway, contVeth); err != nil {
 				return fmt.Errorf("failed to add default route %v", err)
+			}
+			//添加自定义路由
+			if conf.IPAM.Route != nil && len(conf.IPAM.Route) > 0 {
+				for _, Route := range conf.IPAM.Route {
+					// 添加一个路由规则，从DstNet来的包从gw出去
+					DstNet := net.ParseIP(Route.Net)
+					mask := net.ParseIP(Route.NetMask)
+					DstMask := net.IPv4Mask(mask[12], mask[13], mask[14], mask[15])
+					gw := net.ParseIP(Route.GW)
+					gwNet := &net.IPNet{IP: DstNet, Mask: DstMask}
+					router := &netlink.Route{
+						Dst: gwNet,
+						Gw:  gw,
+					}
+					v.log.Debug("Add a route ", router)
+					if err = netlink.RouteAdd(router); err != nil {
+						return fmt.Errorf("failed to add route %v", err)
+					}
+				}
 			}
 
 		}
@@ -159,7 +164,7 @@ func (v *InnerVethCtrl) DoNetworking(args *skel.CmdArgs, conf *conf.Options, res
 	}
 
 	// 做一个软连接便于调试
-	_, err := os.Stat("/var/run/netns/")
+	_, err = os.Stat("/var/run/netns/")
 	if err != nil && os.IsNotExist(err) {
 		err := os.MkdirAll("/var/run/netns/", os.ModeDir)
 		if err != nil {

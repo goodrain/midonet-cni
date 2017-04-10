@@ -41,6 +41,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if options.CNIType == kubernetes {
 		result, err := k8s.CmdAddK8s(args, options, hostname)
 		if err != nil {
+			if err := os.Setenv("CNI_COMMAND", "DEL"); err != nil {
+				// Failed to set CNI_COMMAND to DEL.
+				log.Warning("Failed to set CNI_COMMAND=DEL")
+			} else {
+				if err := cmdDel(args); err != nil {
+					// Failed to cmdDel for failed ADD
+					log.Warning("Failed to cmdDel for failed ADD")
+				}
+			}
 			return err
 		}
 		log.Debug("Configuring pod network success")

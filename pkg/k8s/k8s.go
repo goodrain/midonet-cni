@@ -190,7 +190,7 @@ func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (resu
 	kapi := client.NewKeysAPI(c)
 
 	res, err := kapi.Delete(context.Background(), "/midonet-cni/result/"+netContainerID, nil)
-	if err != nil {
+	if err != nil && !client.IsKeyNotFound(err) {
 		log.Error("Delete cni result error.", err.Error())
 	}
 	res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s/%s", tenantID, netContainerID), nil)
@@ -206,21 +206,19 @@ func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (resu
 		}
 	}
 	res, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s/%s", tenantID, netContainerID), nil)
-	if err != nil {
+	if err != nil && !client.IsKeyNotFound(err) {
 		log.Error("Delete bingding status error.", err.Error())
 	}
 
 	res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
 	if err == nil {
+		i, err := ipam.CreateEtcdIpam(*options)
 		if err == nil {
-			i, err := ipam.CreateEtcdIpam(*options)
-			if err == nil {
-				i.ReleaseIP(tenantID, res.Node.Value)
-			}
+			i.ReleaseIP(tenantID, res.Node.Value)
 		}
 	}
 	res, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
-	if err != nil {
+	if err != nil && !client.IsKeyNotFound(err) {
 		log.Error("Delete used ip info error.", err.Error())
 	}
 	return &types.Result{}, nil
