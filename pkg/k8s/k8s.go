@@ -231,22 +231,23 @@ func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (resu
 			log.Error("Delete used ip info error.", err.Error())
 		}
 	}
+
 	//TODD 租户删除
 	//判断当前租户是否还有容器，若无，则删除租户.
-	// res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s", tenantID), &client.GetOptions{})
-	// if err == nil {
-	// 	if res.Node.Nodes == nil || res.Node.Nodes.Len() == 0 {
-	// 		manager, err := midonet.NewManager(*options)
-	// 		if err != nil {
-	// 			logrus.Error("Create midonet manager error when delete tenant.", err.Error())
-	// 		} else {
-	// 			err := manager.DeleteTenant(tenantID)
-	// 			if err != nil {
-	// 				logrus.Error("Delete tenant error.", err.Error())
-	// 			}
-	// 		}
-	// 	}
-	// }
+	res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s", tenantID), &client.GetOptions{})
+	if err == nil {
+		if res.Node.Nodes == nil || res.Node.Nodes.Len() == 0 {
+			manager, err := midonet.NewManager(*options)
+			if err != nil {
+				logrus.Error("Create midonet manager error when delete tenant.", err.Error())
+			} else {
+				err := manager.DeleteTenant(tenantID)
+				if err != nil {
+					logrus.Error("Delete tenant error.", err.Error())
+				}
+			}
+		}
+	}
 	return &types.Result{}, nil
 }
 
