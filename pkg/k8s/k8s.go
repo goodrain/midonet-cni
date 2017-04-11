@@ -200,27 +200,53 @@ func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (resu
 		err := json.Unmarshal([]byte(bindingInfoStr), &bindingInfo)
 		if err == nil {
 			client, err := midonetclient.NewClient(&options.MidoNetAPIConf)
-			if err != nil {
-				client.DeleteBinding(&bindingInfo)
+			if err == nil {
+				for i := 2; i > 0; i-- {
+					err := client.DeleteBinding(&bindingInfo)
+					if err == nil {
+						break
+					} else {
+						log.Error("Delete binding error.", err.Error())
+					}
+				}
 			}
 		}
-	}
-	res, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s/%s", tenantID, netContainerID), nil)
-	if err != nil && !client.IsKeyNotFound(err) {
-		log.Error("Delete bingding status error.", err.Error())
+		_, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s/%s", tenantID, netContainerID), nil)
+		if err != nil && !client.IsKeyNotFound(err) {
+			log.Error("Delete bingding status error.", err.Error())
+		}
 	}
 
 	res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
 	if err == nil {
 		i, err := ipam.CreateEtcdIpam(*options)
 		if err == nil {
-			i.ReleaseIP(tenantID, res.Node.Value)
+			err := i.ReleaseIP(tenantID, res.Node.Value)
+			if err != nil {
+				log.Error("Release ip when delete pod error,", err.Error())
+			}
+		}
+		res, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
+		if err != nil && !client.IsKeyNotFound(err) {
+			log.Error("Delete used ip info error.", err.Error())
 		}
 	}
-	res, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
-	if err != nil && !client.IsKeyNotFound(err) {
-		log.Error("Delete used ip info error.", err.Error())
-	}
+	//TODD 租户删除
+	//判断当前租户是否还有容器，若无，则删除租户.
+	// res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s", tenantID), &client.GetOptions{})
+	// if err == nil {
+	// 	if res.Node.Nodes == nil || res.Node.Nodes.Len() == 0 {
+	// 		manager, err := midonet.NewManager(*options)
+	// 		if err != nil {
+	// 			logrus.Error("Create midonet manager error when delete tenant.", err.Error())
+	// 		} else {
+	// 			err := manager.DeleteTenant(tenantID)
+	// 			if err != nil {
+	// 				logrus.Error("Delete tenant error.", err.Error())
+	// 			}
+	// 		}
+	// 	}
+	// }
 	return &types.Result{}, nil
 }
 

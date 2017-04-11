@@ -14,7 +14,6 @@
 * `/midonet-cni/tenant/:tenantID/bridge/usage` 正在使用的bridge
 
 * `/midonet-cni/ip/router/available` router ip可用池。value为网段，下级node key为可用IP
-* `/midonet-cni/ip/router/:routerID` router ip 信息。value为：ip_local:ip_remote 
 * `/midonet-cni/ip/pod/:tenantID/available` 租户pod ip可用池，value为网段，下级node key为可用ip
 * `/midonet-cni/ip/pod/:tenantID/:containerID/`租户pod ip信息，value为 ip信息。 ->需要删除，还原到可用池（ip段未改变）
 

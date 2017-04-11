@@ -10,6 +10,8 @@ import (
 
 	"bytes"
 
+	"sync"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/barnettzqg/golang-midonetclient/types"
 )
@@ -412,7 +414,13 @@ func (c *Client) DeleteRoute(routerID, routeID *types.UUID) error {
 	if routerID == nil {
 		return fmt.Errorf("router id can not be empty when delete route")
 	}
-	request, err := http.NewRequest("DELETE", c.apiConf.URL+fmt.Sprintf("/routers/%s/routes/%s", routerID, routeID), nil)
+	var path string
+	if c.version == 5 {
+		path = c.apiConf.URL + fmt.Sprintf("/routes/%s", routeID)
+	} else {
+		path = c.apiConf.URL + fmt.Sprintf("/routers/%s/routes/%s", routerID, routeID)
+	}
+	request, err := http.NewRequest("DELETE", path, nil)
 	if err != nil {
 		logrus.Errorln("midonet client delete  route request error.", err.Error())
 		return err
@@ -631,7 +639,13 @@ func (c *Client) CreateTenant(tenant *types.Tenant) error {
 }
 
 //DeleteTenant 删除租户
-func (c *Client) DeleteTenant(tenantID string) error {
+func (c *Client) DeleteTenant(tenantID string, all bool) error {
+	if all {
+		err := c.deleteAll(tenantID)
+		if err != nil {
+			logrus.Error("delete tenant all info error.", err.Error())
+		}
+	}
 	if tenantID == "" {
 		return fmt.Errorf("Tenant id can not be empty where delete tenant")
 	}
@@ -651,4 +665,80 @@ func (c *Client) DeleteTenant(tenantID string) error {
 		return nil
 	}
 	return c.resultErr(res)
+}
+
+func (c *Client) deleteAll(tenantID string) error {
+	var wait sync.WaitGroup
+	wait.Add(3)
+	//删除router相关
+	go func() {
+		routers := c.GetRouters(tenantID)
+		if routers != nil && len(routers) > 0 {
+			for _, router := range routers {
+				ports := c.GetPortByRouter(router.ID.String())
+				if ports != nil && len(ports) > 0 {
+					for _, port := range ports {
+						c.DeletePort(port.ID)
+						c.DeletePort(port.PeerID)
+						c.DeletePortLink(port.ID)
+					}
+				}
+				routes := c.GetRoutes(router.ID.String())
+				if routes != nil && len(routes) > 0 {
+					for _, route := range routes {
+						c.DeleteRoute(router.ID, route.ID)
+					}
+				}
+				err := c.DeleteRouter(router.ID)
+				if err != nil {
+					logrus.Errorf("Delete router (%s) by tenant (%s) error.%s", router.ID, tenantID, err.Error())
+				}
+			}
+		}
+		wait.Done()
+	}()
+	//删除bridge相关
+	go func() {
+		bridges := c.GetBridges(tenantID)
+		if bridges != nil && len(bridges) > 0 {
+			for _, bridge := range bridges {
+				ports := c.GetPortByBridge(bridge.ID.String())
+				if ports != nil && len(ports) > 0 {
+					for _, port := range ports {
+						c.DeletePort(port.ID)
+						c.DeletePort(port.PeerID)
+						c.DeletePortLink(port.ID)
+					}
+				}
+				err := c.DeleteBridges(bridge.ID)
+				if err != nil {
+					logrus.Errorf("Delete bridge (%s) by tenant (%s) error.%s", bridge.ID, tenantID, err.Error())
+				}
+			}
+		}
+		wait.Done()
+	}()
+	//删除chain相关
+	go func() {
+		chains := c.GetChain(tenantID)
+		if chains != nil && len(chains) > 0 {
+			for _, chain := range chains {
+				rules := c.GetRuleByChain(chain.ID.String())
+				if rules != nil && len(rules) > 0 {
+					for _, rule := range rules {
+						c.DeleteRule(rule.ID)
+					}
+				}
+				err := c.DeleteChain(chain.ID)
+				if err != nil {
+					logrus.Errorf("Delete chain (%s) by tenant (%s) error.%s", chain.ID, tenantID, err.Error())
+				}
+			}
+
+		}
+		wait.Done()
+	}()
+	wait.Wait()
+	logrus.Info("Delete tenant all info success")
+	return nil
 }

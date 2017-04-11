@@ -296,3 +296,48 @@ func (i *EtcdIpam) ReleaseIP(tenantID, oldIP string) error {
 	}
 	return nil
 }
+
+//ReleaseRouterIP 释放router ip
+func (i *EtcdIpam) ReleaseRouterIP(ips []string) error {
+	log := i.log
+	kapi := client.NewKeysAPI(i.client)
+	res, err := kapi.Get(context.Background(), "/midonet-cni/ip/router/available/iprange", nil)
+	if err != nil {
+		log.Error("Get now iprange error when release ip.", err.Error())
+		return err
+	}
+	iprange := res.Node.Value
+	_, ipnet, err := net.ParseCIDR(iprange)
+	if err != nil {
+		log.Error("ParseCIDR iprange error when release ip.", err.Error())
+		return err
+	}
+	for _, oldIP := range ips {
+		ip, oldIPNet, err := net.ParseCIDR(oldIP)
+		if err != nil {
+			log.Error("ParseCIDR oldIP error when release ip.", err.Error())
+			return err
+		}
+		if ipnet.IP.String() == oldIPNet.IP.String() && ipnet.Mask.String() == oldIPNet.Mask.String() {
+			log.Infof("oldIP(%s) could be released.", oldIP)
+			l := etcd.New("/midonet-cni/router_ip", 20, i.client)
+			if l == nil {
+				return fmt.Errorf("etcdsync.NewMutex failed when release old ip")
+			}
+			err := l.Lock()
+			if err != nil {
+				return fmt.Errorf("etcdsync.Lock failed when release old ip")
+			}
+			defer func() {
+				err = l.Unlock()
+				if err != nil {
+					log.Errorf("etcdsync.Unlock failed when release old ip")
+				} else {
+					log.Debug("etcdsync.Unlock OK when release old ip")
+				}
+			}()
+			kapi.Set(context.Background(), "/midonet-cni/ip/router/available/"+ip.String(), oldIP, nil)
+		}
+	}
+	return nil
+}

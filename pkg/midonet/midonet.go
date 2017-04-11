@@ -84,27 +84,27 @@ func (m *Manager) GetTenant(tenantID string) (*midonettypes.Tenant, error) {
 
 //InitTenant 初始化midonet tenant
 func (m *Manager) InitTenant(tenant midonettypes.Tenant) error {
+	if tenant.ID == "" {
+		return fmt.Errorf("tenant id can not be empty where midonet init tenant")
+	}
 	log := m.log
 	log.Infof("Start init tenant,tenant_name:%s,tenant_id:%s", tenant.Name, tenant.ID)
 	l := etcd.New("/midonet-cni/tenant/"+tenant.ID+"/create", 20, m.etcdClient)
 	if l == nil {
-		return fmt.Errorf("etcdsync.NewMutex failed")
+		return fmt.Errorf("etcdsync.NewMutex failed when init tenant")
 	}
 	err := l.Lock()
 	if err != nil {
-		return fmt.Errorf("etcdsync.Lock failed")
+		return fmt.Errorf("etcdsync.Lock failed when init tenant")
 	}
 	defer func() {
 		err = l.Unlock()
 		if err != nil {
 			log.Errorf("etcdsync.Unlock failed where init tenant %s", tenant.ID)
 		} else {
-			log.Debug("etcdsync.Unlock OK")
+			log.Debug("etcdsync.Unlock OK when init tenant")
 		}
 	}()
-	if tenant.ID == "" {
-		return fmt.Errorf("tenant id can not be empty where midonet init tenant")
-	}
 	kapi := etcdclient.NewKeysAPI(m.etcdClient)
 	_, err = kapi.Get(context.Background(), "/midonet-cni/tenant/"+tenant.ID+"/info", nil)
 	if err != nil {
@@ -120,7 +120,7 @@ func (m *Manager) InitTenant(tenant midonettypes.Tenant) error {
 			if err != nil {
 				log.Error("init tenant network error.", err.Error())
 				//删除创建的租户
-				delerr := m.client.DeleteTenant(tenant.ID)
+				delerr := m.client.DeleteTenant(tenant.ID, false)
 				if delerr != nil {
 					log.Error("delete tenant error when init network have a error.", err.Error())
 				}
@@ -172,7 +172,7 @@ func (m *Manager) createRouterPort(ip string, routerID *midonettypes.UUID) (*mid
 }
 
 //CreateDefaultRoute 创建租户router的路由规则
-func (m *Manager) CreateDefaultRoute(localPort, remotePort *midonettypes.RouterPort, routerID, providerRouterID *midonettypes.UUID) error {
+func (m *Manager) CreateDefaultRoute(localPort, remotePort *midonettypes.RouterPort, routerID, providerRouterID *midonettypes.UUID, tenantID string) error {
 	log := m.log
 	outRoute := &midonettypes.Route{
 		ID:               midonettypes.CreateUUID(),
@@ -210,6 +210,7 @@ func (m *Manager) CreateDefaultRoute(localPort, remotePort *midonettypes.RouterP
 		}
 		return err
 	}
+	client.NewKeysAPI(m.etcdClient).Set(context.Background(), "/midonet/tenant/"+tenantID+"/provider_router_route", inRoute.ID.String(), nil)
 	log.Info("Create a in route ", inRoute.ID)
 	return nil
 }
@@ -371,7 +372,7 @@ func (m *Manager) initNetwork(tenant midonettypes.Tenant) error {
 		}
 		return err
 	}
-	//创建 local_royter_port
+	//创建 local_router_port
 	localPort, err := m.createRouterPort(ips[1], router.ID)
 	if err != nil {
 		log.Error("Create tenant router  port error", err.Error())
@@ -426,7 +427,7 @@ func (m *Manager) initNetwork(tenant midonettypes.Tenant) error {
 		return err
 	}
 	//创建默认的路由规则
-	err = m.CreateDefaultRoute(localPort, remotePort, router.ID, ProviderRouterID)
+	err = m.CreateDefaultRoute(localPort, remotePort, router.ID, ProviderRouterID, tenant.ID)
 	if err != nil {
 		log.Error("Create default route error", err.Error())
 		delerr := m.client.DeletePortLink(localPort.ID)
@@ -848,6 +849,75 @@ func (m *Manager) CreateNewBridge(tenant *midonettypes.Tenant) error {
 			log.Error("Save the used bridge to etcd error.", err.Error())
 			return err
 		}
+	}
+	return nil
+}
+
+//DeleteTenant 删除租户
+func (m *Manager) DeleteTenant(tenantID string) error {
+	if tenantID == "" {
+		return fmt.Errorf("tenant id can not be empty where midonet delete tenant")
+	}
+	log := m.log
+	l := etcd.New("/midonet-cni/tenant/"+tenantID+"/create", 20, m.etcdClient)
+	if l == nil {
+		return fmt.Errorf("etcdsync.NewMutex failed when delete tenant")
+	}
+	err := l.Lock()
+	if err != nil {
+		return fmt.Errorf("etcdsync.Lock failed where delete tenant")
+	}
+	defer func() {
+		err = l.Unlock()
+		if err != nil {
+			log.Errorf("etcdsync.Unlock failed where delete tenant %s", tenantID)
+		} else {
+			log.Debug("etcdsync.Unlock OK where delete tenant")
+		}
+	}()
+	ips := m.client.GetRouterIPsByTenant(tenantID)
+	err = m.client.DeleteTenant(tenantID, true)
+	if err != nil {
+		log.Error("Delete tenant error.", err.Error())
+		return err
+	}
+
+	etcdAPI := client.NewKeysAPI(m.etcdClient)
+	//删除租户
+	ProviderRouterID, err := midonettypes.String2UUID(m.conf.MidoNetAPIConf.ProviderRouterID)
+	if err != nil {
+		log.Error("Parse the Provider Router ID Error", err.Error())
+	} else {
+		res, err := etcdAPI.Get(context.Background(), "/midonet/tenant/"+tenantID+"/provider_router_route", nil)
+		if err == nil {
+			routeID, err := midonettypes.String2UUID(res.Node.Value)
+			if err == nil {
+				err := m.client.DeleteRoute(ProviderRouterID, routeID)
+				if err != nil {
+					log.Error("Delete route in provider router error.", err.Error())
+				}
+			}
+		}
+	}
+	_, err = etcdAPI.Delete(context.Background(), "/midonet-cni/tenant/"+tenantID, &client.DeleteOptions{Dir: true, Recursive: true})
+	if err != nil && !client.IsKeyNotFound(err) {
+		log.Error("Delete Tenant info in etcd error when delete tenant.", err.Error())
+	}
+	_, err = etcdAPI.Delete(context.Background(), "/midonet-cni/ip/pod/"+tenantID, &client.DeleteOptions{Dir: true, Recursive: true})
+	if err != nil && !client.IsKeyNotFound(err) {
+		log.Error("Delete Tenant info in etcd error when delete tenant.", err.Error())
+	}
+	_, err = etcdAPI.Delete(context.Background(), "/midonet-cni/bingding/"+tenantID, &client.DeleteOptions{Dir: true, Recursive: true})
+	if err != nil && !client.IsKeyNotFound(err) {
+		log.Error("Delete Tenant info in etcd error when delete tenant.", err.Error())
+	}
+	_, err = etcdAPI.Delete(context.Background(), "/midonet-cni/result/"+tenantID, &client.DeleteOptions{Dir: true, Recursive: true})
+	if err != nil && !client.IsKeyNotFound(err) {
+		log.Error("Delete Tenant info in etcd error when delete tenant.", err.Error())
+	}
+	ipam, err := ipam.CreateEtcdIpam(m.conf)
+	if err == nil {
+		ipam.ReleaseRouterIP(ips)
 	}
 	return nil
 }
