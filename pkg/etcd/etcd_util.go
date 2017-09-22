@@ -125,17 +125,15 @@ func (m *Mutex) Lock() (err error) {
 }
 
 func (m *Mutex) lock() (err error) {
-	logrus.Debug("Trying to create a node : key=%v", m.key)
 	setOptions := &client.SetOptions{
 		PrevExist: client.PrevNoExist,
 		TTL:       m.ttl,
 	}
 	resp, err := m.kapi.Set(m.ctx, m.key, m.id, setOptions)
 	if err == nil {
-		logrus.Debug("Create node %v OK [%q]", m.key, resp)
 		return nil
 	}
-	logrus.Debug("Create node %v failed [%v]", m.key, err)
+	logrus.Errorf("Create node %v failed [%v]", m.key, err)
 	e, ok := err.(client.Error)
 	if !ok {
 		return err
@@ -148,19 +146,16 @@ func (m *Mutex) lock() (err error) {
 	if err != nil {
 		return err
 	}
-	logrus.Debug("Get node %v OK", m.key)
 	watcherOptions := &client.WatcherOptions{
 		AfterIndex: resp.Index,
 		Recursive:  false,
 	}
 	watcher := m.kapi.Watcher(m.key, watcherOptions)
 	for {
-		logrus.Debug("Watching %v ...", m.key)
 		resp, err = watcher.Next(m.ctx)
 		if err != nil {
 			return err
 		}
-		logrus.Debug("Received an event : %q", resp)
 		if resp.Action == deleteAction || resp.Action == expireAction {
 			return nil
 		}
@@ -180,10 +175,9 @@ func (m *Mutex) Unlock() (err error) {
 		var resp *client.Response
 		resp, err = m.kapi.Delete(m.ctx, m.key, nil)
 		if err == nil {
-			logrus.Debug("Delete %v OK", m.key)
 			return nil
 		}
-		logrus.Debug("Delete %v falied: %q", m.key, resp)
+		logrus.Errorf("Delete %v falied: %q", m.key, resp)
 		e, ok := err.(client.Error)
 		if ok && e.Code == client.ErrorCodeKeyNotFound {
 			return nil

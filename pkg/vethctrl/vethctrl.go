@@ -6,17 +6,17 @@ import (
 	"os"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/containernetworking/cni/pkg/ip"
-	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/020"
+	"github.com/containernetworking/plugins/pkg/ip"
+	"github.com/containernetworking/plugins/pkg/ns"
 	conf "github.com/goodrain/midonet-cni/pkg/types"
 	"github.com/vishvananda/netlink"
 )
 
 //VethCtrl veth网桥操作接口
 type VethCtrl interface {
-	DoNetworking(args *skel.CmdArgs, conf *conf.Options, result *types.Result) error
+	DoNetworking(args *skel.CmdArgs, conf *conf.Options, result *types020.Result) error
 }
 
 //GetVethCtrl 获取veth操作器
@@ -39,12 +39,25 @@ type InnerVethCtrl struct {
 }
 
 //DoNetworking 创建veth对,绑定IP
-func (v *InnerVethCtrl) DoNetworking(args *skel.CmdArgs, conf *conf.Options, result *types.Result) error {
+func (v *InnerVethCtrl) DoNetworking(args *skel.CmdArgs, conf *conf.Options, result *types020.Result) error {
 	var err error
 	// Select the first 11 characters of the containerID for the host veth.
 	hostVethName := "vif" + args.ContainerID[:min(12, len(args.ContainerID))]
 	contVethName := "eth0"
 	v.log.Debugf("Set veth %s , %s", hostVethName, contVethName)
+	// 做一个软连接便于调试
+	_, err = os.Stat("/var/run/netns/")
+	if err != nil && os.IsNotExist(err) {
+		err := os.MkdirAll("/var/run/netns/", os.ModeDir)
+		if err != nil {
+			v.log.Warnf("create dir /var/run/netns/ error", err.Error())
+		}
+	}
+	err = os.Symlink(args.Netns, "/var/run/netns/"+args.ContainerID[:min(12, len(args.ContainerID))])
+	if err != nil {
+		v.log.Warnf("create link error. source file:%s,target file:%s", args.Netns, "/var/run/netns/"+args.ContainerID[:min(12, len(args.ContainerID))])
+	}
+
 	err = ns.WithNetNSPath(args.Netns, func(hostNS ns.NetNS) error {
 		//判断eth0网卡是否存在，如果已存在将其修改为eth1
 		oldEth0, err := netlink.LinkByName(contVethName)
@@ -103,7 +116,6 @@ func (v *InnerVethCtrl) DoNetworking(args *skel.CmdArgs, conf *conf.Options, res
 		}
 		// Before returning, create the routes inside the namespace, first for IPv4 then IPv6.
 		if result.IP4 != nil {
-
 			if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &result.IP4.IP}); err != nil {
 				return fmt.Errorf("failed to add IP addr to %q: %v", contVethName, err)
 			}
@@ -138,7 +150,6 @@ func (v *InnerVethCtrl) DoNetworking(args *skel.CmdArgs, conf *conf.Options, res
 					}
 				}
 			}
-
 		}
 		// Now that the everything has been successfully set up in the container, move the "host" end of the
 		// veth into the host namespace.
@@ -161,19 +172,6 @@ func (v *InnerVethCtrl) DoNetworking(args *skel.CmdArgs, conf *conf.Options, res
 
 	if err = netlink.LinkSetUp(hostVeth); err != nil {
 		return fmt.Errorf("failed to set %q up: %v", hostVethName, err)
-	}
-
-	// 做一个软连接便于调试
-	_, err = os.Stat("/var/run/netns/")
-	if err != nil && os.IsNotExist(err) {
-		err := os.MkdirAll("/var/run/netns/", os.ModeDir)
-		if err != nil {
-			v.log.Warnf("create dir /var/run/netns/ error", err.Error())
-		}
-	}
-	err = os.Symlink(args.Netns, "/var/run/netns/"+args.ContainerID[:min(12, len(args.ContainerID))])
-	if err != nil {
-		v.log.Warnf("create link error. source file:%s,target file:%s", args.Netns, "/var/run/netns/"+args.ContainerID[:min(12, len(args.ContainerID))])
 	}
 	return nil
 }

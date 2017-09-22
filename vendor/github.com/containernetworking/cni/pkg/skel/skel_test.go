@@ -22,7 +22,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
 
-	"github.com/containernetworking/cni/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -121,7 +120,7 @@ var _ = Describe("dispatching to the correct callback", func() {
 
 		DescribeTable("required / optional env vars", envVarChecker,
 			Entry("command", "CNI_COMMAND", true),
-			Entry("container id", "CNI_CONTAINER_ID", false),
+			Entry("container id", "CNI_CONTAINERID", false),
 			Entry("net ns", "CNI_NETNS", true),
 			Entry("if name", "CNI_IFNAME", true),
 			Entry("args", "CNI_ARGS", false),
@@ -208,7 +207,7 @@ var _ = Describe("dispatching to the correct callback", func() {
 
 		DescribeTable("required / optional env vars", envVarChecker,
 			Entry("command", "CNI_COMMAND", true),
-			Entry("container id", "CNI_CONTAINER_ID", false),
+			Entry("container id", "CNI_CONTAINERID", false),
 			Entry("net ns", "CNI_NETNS", false),
 			Entry("if name", "CNI_IFNAME", true),
 			Entry("args", "CNI_ARGS", false),
@@ -226,7 +225,7 @@ var _ = Describe("dispatching to the correct callback", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(stdout).To(MatchJSON(`{
-				"cniVersion": "0.2.0",
+				"cniVersion": "0.3.1",
 				"supportedVersions": ["9.8.7"]
 			}`))
 		})
@@ -241,7 +240,7 @@ var _ = Describe("dispatching to the correct callback", func() {
 
 		DescribeTable("VERSION does not need the usual env vars", envVarChecker,
 			Entry("command", "CNI_COMMAND", true),
-			Entry("container id", "CNI_CONTAINER_ID", false),
+			Entry("container id", "CNI_CONTAINERID", false),
 			Entry("net ns", "CNI_NETNS", false),
 			Entry("if name", "CNI_IFNAME", false),
 			Entry("args", "CNI_ARGS", false),
@@ -258,7 +257,7 @@ var _ = Describe("dispatching to the correct callback", func() {
 
 				Expect(err).NotTo(HaveOccurred())
 				Expect(stdout).To(MatchJSON(`{
-					"cniVersion": "0.2.0",
+					"cniVersion": "0.3.1",
 					"supportedVersions": ["9.8.7"]
 			}`))
 			})
@@ -289,7 +288,7 @@ var _ = Describe("dispatching to the correct callback", func() {
 
 	Context("when stdin cannot be read", func() {
 		BeforeEach(func() {
-			dispatch.Stdin = &testutils.BadReader{}
+			dispatch.Stdin = &BadReader{}
 		})
 
 		It("does not call any cmd callback", func() {
@@ -344,3 +343,19 @@ var _ = Describe("dispatching to the correct callback", func() {
 		})
 	})
 })
+
+// BadReader is an io.Reader which always errors
+type BadReader struct {
+	Error error
+}
+
+func (r *BadReader) Read(buffer []byte) (int, error) {
+	if r.Error != nil {
+		return 0, r.Error
+	}
+	return 0, errors.New("banana")
+}
+
+func (r *BadReader) Close() error {
+	return nil
+}

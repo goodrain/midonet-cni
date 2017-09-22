@@ -21,16 +21,6 @@ import (
 	"github.com/goodrain/midonet-cni/pkg/util"
 )
 
-// Policy is a struct to hold policy config (which currently happens to also contain some K8s config)
-type Policy struct {
-	PolicyType              string `json:"type"`
-	K8sAPIRoot              string `json:"k8s_api_root"`
-	K8sAuthToken            string `json:"k8s_auth_token"`
-	K8sClientCertificate    string `json:"k8s_client_certificate"`
-	K8sClientKey            string `json:"k8s_client_key"`
-	K8sCertificateAuthority string `json:"k8s_certificate_authority"`
-}
-
 // Kubernetes a K8s specific struct to hold config
 type Kubernetes struct {
 	K8sAPIRoot string `json:"k8s_api_root"`
@@ -49,11 +39,8 @@ type Options struct {
 	MidoNetBridgeCIDR string               `json:"midonet_bridge_cidr"`
 	IPAM              IPAM                 `json:"ipam"`
 	MTU               int                  `json:"mtu"`
-	Policy            Policy               `json:"policy"`
-	Kubernetes        Kubernetes           `json:"kubernetes"`
 	VethCtrlType      string               `json:"veth_ctrl_type"`
 	MidoNetAPIConf    types.MidoNetAPIConf `json:"midonet_api"`
-	CNIType           string               `json:"cni_type"`
 	ETCDConf          ETCDConf             `json:"etcd_conf"`
 	Log               *logrus.Entry
 }
@@ -175,23 +162,6 @@ func (c *Options) Default() error {
 			return errors.New("Find midonet api config from etcd error." + err.Error())
 		}
 		c.MidoNetAPIConf = con
-	}
-	if c.Kubernetes.K8sAPIRoot == "" {
-		etcdClient, err := createETCDClient(c.ETCDConf)
-		if err != nil {
-			return err
-		}
-		response, err := client.NewKeysAPI(etcdClient).Get(context.Background(), "/midonet-cni/config/kubernetes", &client.GetOptions{})
-		if err != nil {
-			return errors.New("Find kubernetes api config from etcd error." + err.Error())
-		}
-		value := response.Node.Value
-		var kube Kubernetes
-		err = json.Unmarshal([]byte(value), &kube)
-		if err != nil {
-			return errors.New("Find kubernetes api config from etcd error." + err.Error())
-		}
-		c.Kubernetes = kube
 	}
 	//如果etcd中有定义route，获取它
 	if c.IPAM.Route == nil || len(c.IPAM.Route) == 0 {
