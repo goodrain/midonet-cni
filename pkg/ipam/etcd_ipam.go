@@ -229,6 +229,11 @@ func (i *EtcdIpam) GetNewIP(tenant *midonettypes.Tenant, containerID string) (ip
 		if !strings.HasSuffix(node.Key, "/iprange") {
 			_, err := kapi.Delete(context.Background(), node.Key, &client.DeleteOptions{})
 			if err != nil {
+				logrus.Error("get pod ip form etcd error,", err.Error())
+				continue
+			}
+			//忽略错误数据.254结尾的IP
+			if strings.HasSuffix(node.Key, ".254") {
 				continue
 			}
 			ipData = node.Value
