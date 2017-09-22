@@ -186,6 +186,10 @@ func (i *EtcdIpam) CreateIPsForTenantBridge(tenant midonettypes.Tenant, iprange 
 		if !r.Next() {
 			break
 		}
+		//去除.254 IP,此IP是bridge得IP地址。不能占用，否则网络到不了ROUTER
+		if strings.HasSuffix(v.String(), ".254") {
+			continue
+		}
 		client.NewKeysAPI(i.client).Set(context.Background(), "/midonet-cni/ip/pod/"+tenant.ID+"/available/"+v.String(), v.StringSuffix(), nil)
 	}
 
