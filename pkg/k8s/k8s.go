@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	midonetclient "github.com/barnettzqg/golang-midonetclient/midonet"
@@ -144,8 +146,11 @@ func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (type
 	if err != nil && !client.IsKeyNotFound(err) {
 		log.Error("Delete cni result error.", err.Error())
 	}
+	var deletePort bool
+	var getSuccess bool
 	res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s/%s", tenantID, netContainerID), nil)
 	if err == nil {
+		getSuccess = true
 		bindingInfoStr := res.Node.Value
 		bindingInfo := midonettypes.HostInterfacePort{}
 		err := json.Unmarshal([]byte(bindingInfoStr), &bindingInfo)
@@ -160,6 +165,17 @@ func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (type
 						log.Error("Delete binding error.", err.Error())
 					}
 				}
+				for i := 2; i > 0; i-- {
+					err := client.DeletePort(bindingInfo.PortID)
+					if err != nil {
+						log.Error("Delete port error.", err.Error())
+					} else {
+						log.Info("Delete port and binding success.")
+						deletePort = true
+						break
+					}
+					time.Sleep(time.Millisecond * 100)
+				}
 			}
 		}
 		_, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s/%s", tenantID, netContainerID), nil)
@@ -167,35 +183,32 @@ func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (type
 			log.Error("Delete bingding status error.", err.Error())
 		}
 	}
-
-	res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
-	if err == nil {
-		i, err := ipam.CreateEtcdIpam(*options)
+	if deletePort {
+		res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
 		if err == nil {
-			err := i.ReleaseIP(tenantID, res.Node.Value)
-			if err != nil {
-				log.Error("Release ip when delete pod error,", err.Error())
-			}
-		}
-		res, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
-		if err != nil && !client.IsKeyNotFound(err) {
-			log.Error("Delete used ip info error.", err.Error())
-		}
-	}
-
-	res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s", tenantID), &client.GetOptions{})
-	if err == nil {
-		if res.Node.Nodes == nil || res.Node.Nodes.Len() == 0 {
-			manager, err := midonet.NewManager(*options)
-			if err != nil {
-				logrus.Error("Create midonet manager error when delete tenant.", err.Error())
-			} else {
-				err := manager.DeleteTenant(tenantID)
+			i, err := ipam.CreateEtcdIpam(*options)
+			if err == nil {
+				err := i.ReleaseIP(tenantID, res.Node.Value)
 				if err != nil {
-					logrus.Error("Delete tenant error.", err.Error())
+					log.Error("Release ip when delete pod error,", err.Error())
+				}
+			}
+			res, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
+			if err != nil && !client.IsKeyNotFound(err) {
+				var print bool
+				if cerr, ok := err.(client.Error); ok {
+					if cerr.Code == client.ErrorCodeKeyNotFound {
+						print = false
+					}
+				}
+				if print {
+					log.Error("Delete used ip info error.", err.Error())
 				}
 			}
 		}
+	} else if getSuccess {
+		log.Warning("Delete bridge port error pod ip can't release .")
 	}
+	os.Remove("/var/run/netns/" + args.ContainerID[:min(12, len(args.ContainerID))])
 	return &types020.Result{}, nil
 }
