@@ -212,3 +212,10 @@ func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (type
 	os.Remove("/var/run/netns/" + args.ContainerID[:min(12, len(args.ContainerID))])
 	return &types020.Result{}, nil
 }
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
