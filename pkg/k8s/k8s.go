@@ -5,17 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
+	"os"
 	"time"
-
-	"k8s.io/client-go/1.4/kubernetes"
-	"k8s.io/client-go/1.4/tools/clientcmd"
 
 	"github.com/Sirupsen/logrus"
 	midonetclient "github.com/barnettzqg/golang-midonetclient/midonet"
 	midonettypes "github.com/barnettzqg/golang-midonetclient/types"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/020"
 	"github.com/coreos/etcd/client"
 	"github.com/goodrain/midonet-cni/pkg/etcd"
 	"github.com/goodrain/midonet-cni/pkg/ipam"
@@ -26,126 +24,82 @@ import (
 
 // CmdAddK8s k8s cni
 // 增强的幂等特性
-func CmdAddK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (result *types.Result, err error) {
+func CmdAddK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (types.Result, error) {
 	k8sArgs := conf.K8sArgs{}
-	err = types.LoadArgs(args.Args, &k8sArgs)
+	err := types.LoadArgs(args.Args, &k8sArgs)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 	log := logrus.WithFields(logrus.Fields{"pod_name": k8sArgs.K8S_POD_NAME, "namespace": k8sArgs.K8S_POD_NAMESPACE, "action": "Add"})
 	options.Log = log
+	//create etcd client
 	netContainerID := string(k8sArgs.K8S_POD_INFRA_CONTAINER_ID)
 	c, err := etcd.CreateETCDClient(options.ETCDConf)
 	if err != nil {
 		log.Error("create etcd client error.", err.Error())
 		return nil, err
 	}
+	//return last result if exist
 	kapi := client.NewKeysAPI(c)
 	res, err := kapi.Get(context.Background(), "/midonet-cni/result/"+netContainerID, nil)
 	if err == nil {
-		var r types.Result
+		var r types020.Result
 		err := json.Unmarshal([]byte(res.Node.Value), &r)
 		if err == nil {
 			log.Debugf("container(%s) result is exit.return old data.", netContainerID)
 			return &r, nil
 		}
 	}
+	//构建本机端口映射
+
 	var bindingIP net.IPNet
 	var bindingGetway net.IP
-	var ipnet *net.IPNet
-	if options.IPAM.Type == "reginapi" {
-		client, err := newK8sClient(options)
-		if err != nil {
-			return result, err
-		}
-		labels := make(map[string]string)
-		annot := make(map[string]string)
-		logrus.WithField("client", client).Debug("Created Kubernetes client")
-		labels, annot, err = getK8sLabelsAnnotations(client, k8sArgs)
-		if err != nil {
-			return result, err
-		}
-		logrus.WithField("labels", labels).Debug("Fetched K8s labels")
-		logrus.WithField("annotations", annot).Debug("Fetched K8s annotations")
-		region := &ipam.RegionAPI{
-			ReginNetAPI: options.IPAM.ReginNetAPI,
-			Token:       options.IPAM.ReginToken,
-			HTTPTimeOut: time.Minute * 1,
-		}
-		var version = ""
-		if v, ok := labels["version"]; ok {
-			version = v
-		}
-		info := conf.ReginNewIP{
-			HostID:        options.MidoNetHostUUID,
-			CtnID:         args.ContainerID,
-			ReplicaID:     strings.Split(string(k8sArgs.K8S_POD_NAME), "-")[0],
-			DeployVersion: version,
-			PodName:       string(k8sArgs.K8S_POD_NAME),
-		}
-		ip, err := region.GetNewIP(info, string(k8sArgs.K8S_POD_NAMESPACE))
-		if err != nil {
-			return result, err
-		}
-		ips := strings.Split(ip, "@")
-		if ip == "" || len(ips) != 2 {
-			log.Errorf("pod_namespace= %s not apply ip rc_id= %s", k8sArgs.K8S_POD_NAMESPACE, strings.Split(string(k8sArgs.K8S_POD_NAME), "-")[0])
-			return result, fmt.Errorf("get ip from region api error")
-		}
-		var nip net.IP
-		nip, ipnet, err = net.ParseCIDR(ips[0])
-		bindingGetway = net.ParseIP(ips[1])
-		if err != nil {
-			log.Error("the ip that it from region api get parse error, ", err.Error())
-			return result, err
-		}
-		bindingIP = net.IPNet{
-			IP:   nip,
-			Mask: ipnet.Mask,
-		}
-	} else if options.IPAM.Type == "etcd" {
-		midonetManager, err := midonet.NewManager(*options)
-		if err != nil {
-			return nil, err
-		}
-		//获取并验证租户是否存在
-		tenant, err := midonetManager.GetTenant(string(k8sArgs.K8S_POD_NAMESPACE))
-		if err != nil {
-			return nil, err
-		}
-		ipamManager, err := ipam.CreateEtcdIpam(*options)
-		if err != nil {
-			logrus.Error("Create ipam error where get new ip for create pod")
-			return nil, err
-		}
 
-		ipinfo, err := ipamManager.GetNewIP(tenant, netContainerID)
-		if err != nil {
-			if err.Error() == "CreateNewBridge" {
-				err = midonetManager.CreateNewBridge(tenant)
-				if err != nil {
-					return nil, err
-				}
-				ipinfo, err = ipamManager.GetNewIP(tenant, netContainerID)
-			} else {
-				return nil, err
-			}
-		}
-		err = midonetManager.Bingding("vif"+args.ContainerID[:12], tenant.ID, netContainerID)
-		if err != nil {
-			log.Error("Bingding veth to midonet bridge port error. will try", err.Error())
-			err = midonetManager.Bingding("vif"+args.ContainerID[:12], tenant.ID, netContainerID)
+	midonetManager, err := midonet.NewManager(*options)
+	if err != nil {
+		return nil, err
+	}
+	//获取并验证租户是否存在
+	tenant, err := midonetManager.GetTenant(string(k8sArgs.K8S_POD_NAMESPACE))
+	if err != nil {
+		return nil, err
+	}
+	ipamManager, err := ipam.CreateEtcdIpam(*options)
+	if err != nil {
+		logrus.Error("Create ipam error where get new ip for create pod")
+		return nil, err
+	}
+	//分配新IP
+	ipinfo, err := ipamManager.GetNewIP(tenant, netContainerID)
+	if err != nil {
+		//IP分配完成，创建新的网桥
+		if err.Error() == "CreateNewBridge" {
+			err = midonetManager.CreateNewBridge(tenant)
 			if err != nil {
 				return nil, err
 			}
+			ipinfo, err = ipamManager.GetNewIP(tenant, netContainerID)
+		} else {
+			return nil, err
 		}
-		bindingGetway = ipinfo.Getway
-		bindingIP = ipinfo.IPNet
-	} else {
-		return result, fmt.Errorf("Undefined IPAM")
 	}
-	result = &types.Result{
-		IP4: &types.IPConfig{
+	if err != nil {
+		return nil, fmt.Errorf("The IP allocation error: %s", err.Error())
+	}
+	//绑定网卡
+	err = midonetManager.Bingding("vif"+args.ContainerID[:12], tenant.ID, netContainerID)
+	if err != nil {
+		log.Error("Bingding veth to midonet bridge port error. will try", err.Error())
+		err = midonetManager.Bingding("vif"+args.ContainerID[:12], tenant.ID, netContainerID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	bindingGetway = ipinfo.Getway
+	bindingIP = ipinfo.IPNet
+	result := &types020.Result{
+		CNIVersion: "0.2.0",
+		IP4: &types020.IPConfig{
 			Gateway: bindingGetway,
 			IP:      bindingIP,
 		},
@@ -155,33 +109,32 @@ func CmdAddK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (resu
 	err = ctrl.DoNetworking(args, options, result)
 	if err != nil {
 		log.Error("Create and binding ip error,", err.Error())
-		return result, err
+		return nil, err
 	}
 	reData, err := json.Marshal(result)
 	if err == nil {
-		_, err := kapi.Set(context.Background(), "/midonet-cni/result/"+netContainerID, string(reData), nil)
-		if err != nil {
+		_, cerr := kapi.Set(context.Background(), "/midonet-cni/result/"+netContainerID, string(reData), nil)
+		if cerr != nil {
 			log.Warn("save result error.")
 		}
 	}
-	return result, nil
+	return result, err
 }
 
 //CmdDelK8s 删除
-func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (result *types.Result, err error) {
+func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (types.Result, error) {
 	if options.IPAM.Type != "etcd" {
-		return &types.Result{}, nil
+		return nil, fmt.Errorf("ipam type only support etcd")
 	}
 	k8sArgs := conf.K8sArgs{}
-	err = types.LoadArgs(args.Args, &k8sArgs)
+	err := types.LoadArgs(args.Args, &k8sArgs)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 	log := logrus.WithFields(logrus.Fields{"pod_name": k8sArgs.K8S_POD_NAME, "namespace": k8sArgs.K8S_POD_NAMESPACE, "action": "Delete"})
 	options.Log = log
 	netContainerID := string(k8sArgs.K8S_POD_INFRA_CONTAINER_ID)
 	tenantID := string(k8sArgs.K8S_POD_NAMESPACE)
-
 	c, err := etcd.CreateETCDClient(options.ETCDConf)
 	if err != nil {
 		logrus.Error("create etcd client error.", err.Error())
@@ -193,8 +146,11 @@ func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (resu
 	if err != nil && !client.IsKeyNotFound(err) {
 		log.Error("Delete cni result error.", err.Error())
 	}
+	var deletePort bool
+	var getSuccess bool
 	res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s/%s", tenantID, netContainerID), nil)
 	if err == nil {
+		getSuccess = true
 		bindingInfoStr := res.Node.Value
 		bindingInfo := midonettypes.HostInterfacePort{}
 		err := json.Unmarshal([]byte(bindingInfoStr), &bindingInfo)
@@ -209,6 +165,17 @@ func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (resu
 						log.Error("Delete binding error.", err.Error())
 					}
 				}
+				for i := 2; i > 0; i-- {
+					err := client.DeletePort(bindingInfo.PortID)
+					if err != nil {
+						log.Error("Delete port error.", err.Error())
+					} else {
+						log.Info("Delete port and binding success.")
+						deletePort = true
+						break
+					}
+					time.Sleep(time.Millisecond * 100)
+				}
 			}
 		}
 		_, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s/%s", tenantID, netContainerID), nil)
@@ -216,103 +183,39 @@ func CmdDelK8s(args *skel.CmdArgs, options *conf.Options, hostname string) (resu
 			log.Error("Delete bingding status error.", err.Error())
 		}
 	}
-
-	res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
-	if err == nil {
-		i, err := ipam.CreateEtcdIpam(*options)
+	if deletePort {
+		res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
 		if err == nil {
-			err := i.ReleaseIP(tenantID, res.Node.Value)
-			if err != nil {
-				log.Error("Release ip when delete pod error,", err.Error())
-			}
-		}
-		res, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
-		if err != nil && !client.IsKeyNotFound(err) {
-			log.Error("Delete used ip info error.", err.Error())
-		}
-	}
-
-	//TODD 租户删除
-	//判断当前租户是否还有容器，若无，则删除租户.
-	res, err = kapi.Get(context.Background(), fmt.Sprintf("/midonet-cni/bingding/%s", tenantID), &client.GetOptions{})
-	if err == nil {
-		if res.Node.Nodes == nil || res.Node.Nodes.Len() == 0 {
-			manager, err := midonet.NewManager(*options)
-			if err != nil {
-				logrus.Error("Create midonet manager error when delete tenant.", err.Error())
-			} else {
-				err := manager.DeleteTenant(tenantID)
+			i, err := ipam.CreateEtcdIpam(*options)
+			if err == nil {
+				err := i.ReleaseIP(tenantID, res.Node.Value)
 				if err != nil {
-					logrus.Error("Delete tenant error.", err.Error())
+					log.Error("Release ip when delete pod error,", err.Error())
+				}
+			}
+			res, err = kapi.Delete(context.Background(), fmt.Sprintf("/midonet-cni/ip/pod/%s/%s", tenantID, netContainerID), nil)
+			if err != nil && !client.IsKeyNotFound(err) {
+				var print bool
+				if cerr, ok := err.(client.Error); ok {
+					if cerr.Code == client.ErrorCodeKeyNotFound {
+						print = false
+					}
+				}
+				if print {
+					log.Error("Delete used ip info error.", err.Error())
 				}
 			}
 		}
+	} else if getSuccess {
+		log.Warning("Delete bridge port error pod ip can't release .")
 	}
-	return &types.Result{}, nil
+	os.Remove("/var/run/netns/" + args.ContainerID[:min(12, len(args.ContainerID))])
+	return &types020.Result{}, nil
 }
 
-func newK8sClient(conf *conf.Options) (*kubernetes.Clientset, error) {
-	// Some config can be passed in a kubeconfig file
-	kubeconfig := conf.Kubernetes.Kubeconfig
-
-	// Config can be overridden by config passed in explicitly in the network config.
-	configOverrides := &clientcmd.ConfigOverrides{}
-
-	// If an API root is given, make sure we're using using the name / port rather than
-	// the full URL. Earlier versions of the config required the full `/api/v1/` extension,
-	// so split that off to ensure compatibility.
-	conf.Policy.K8sAPIRoot = strings.Split(conf.Policy.K8sAPIRoot, "/api/")[0]
-
-	var overridesMap = []struct {
-		variable *string
-		value    string
-	}{
-		{&configOverrides.ClusterInfo.Server, conf.Policy.K8sAPIRoot},
-		{&configOverrides.AuthInfo.ClientCertificate, conf.Policy.K8sClientCertificate},
-		{&configOverrides.AuthInfo.ClientKey, conf.Policy.K8sClientKey},
-		{&configOverrides.ClusterInfo.CertificateAuthority, conf.Policy.K8sCertificateAuthority},
-		{&configOverrides.AuthInfo.Token, conf.Policy.K8sAuthToken},
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
-
-	// Using the override map above, populate any non-empty values.
-	for _, override := range overridesMap {
-		if override.value != "" {
-			*override.variable = override.value
-		}
-	}
-
-	// Also allow the K8sAPIRoot to appear under the "kubernetes" block in the network config.
-	if conf.Kubernetes.K8sAPIRoot != "" {
-		configOverrides.ClusterInfo.Server = conf.Kubernetes.K8sAPIRoot
-	}
-
-	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
-		configOverrides).ClientConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	logrus.Debugf("Kubernetes config %v", config)
-
-	// Create the clientset
-	return kubernetes.NewForConfig(config)
-
-}
-
-func getK8sLabelsAnnotations(client *kubernetes.Clientset, k8sargs conf.K8sArgs) (map[string]string, map[string]string, error) {
-	pod, err := client.Pods(fmt.Sprintf("%s", k8sargs.K8S_POD_NAMESPACE)).
-		Get(fmt.Sprintf("%s", k8sargs.K8S_POD_NAME))
-	if err != nil {
-		logrus.Error("Get pods from apiserver error," + err.Error())
-		return nil, nil, err
-	}
-
-	labels := pod.Labels
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-
-	return labels, pod.Annotations, nil
+	return b
 }

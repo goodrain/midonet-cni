@@ -7,7 +7,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/020"
 	conf "github.com/goodrain/midonet-cni/pkg/types"
 )
 
@@ -15,7 +15,7 @@ import (
 type ShellCtrl struct{}
 
 //DoNetworking 创建veth并绑定ip
-func (s *ShellCtrl) DoNetworking(args *skel.CmdArgs, conf *conf.Options, result *types.Result) error {
+func (s *ShellCtrl) DoNetworking(args *skel.CmdArgs, conf *conf.Options, result *types020.Result) error {
 	var err error
 	err = s.ExecCreateBr(args.ContainerID)
 	if err != nil {

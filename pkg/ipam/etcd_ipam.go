@@ -236,6 +236,10 @@ func (i *EtcdIpam) GetNewIP(tenant *midonettypes.Tenant, containerID string) (ip
 			if strings.HasSuffix(node.Key, ".254") {
 				continue
 			}
+			//忽略错误数据.254结尾的IP
+			if strings.HasSuffix(node.Key, ".254") {
+				continue
+			}
 			ipData = node.Value
 			break
 		}

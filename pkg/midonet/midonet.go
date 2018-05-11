@@ -110,20 +110,20 @@ func (m *Manager) InitTenant(tenant midonettypes.Tenant) error {
 	if err != nil {
 		if cerr, ok := err.(etcdclient.Error); ok && cerr.Code == etcdclient.ErrorCodeKeyNotFound {
 			log.Info("Begin init tenant to midonet")
-			err := m.client.CreateTenant(&tenant)
-			if err != nil {
-				log.Error("Create tennat error where init midonet tenant ", err.Error())
-				return err
-			}
+			// err := m.client.CreateTenant(&tenant)
+			// if err != nil {
+			// 	log.Error("Create tennat error where init midonet tenant ", err.Error())
+			// 	return err
+			// }
 			//先初始化租户网络
 			err = m.initNetwork(tenant)
 			if err != nil {
 				log.Error("init tenant network error.", err.Error())
 				//删除创建的租户
-				delerr := m.client.DeleteTenant(tenant.ID, false)
-				if delerr != nil {
-					log.Error("delete tenant error when init network have a error.", err.Error())
-				}
+				// delerr := m.client.DeleteTenant(tenant.ID, false)
+				// if delerr != nil {
+				// 	log.Error("delete tenant error when init network have a error.", err.Error())
+				// }
 				return err
 			}
 			//存储信息
@@ -876,11 +876,11 @@ func (m *Manager) DeleteTenant(tenantID string) error {
 		}
 	}()
 	ips := m.client.GetRouterIPsByTenant(tenantID)
-	err = m.client.DeleteTenant(tenantID, true)
-	if err != nil {
-		log.Error("Delete tenant error.", err.Error())
-		return err
-	}
+	// err = m.client.DeleteTenant(tenantID, true)
+	// if err != nil {
+	// 	log.Error("Delete tenant error.", err.Error())
+	// 	return err
+	// }
 
 	etcdAPI := client.NewKeysAPI(m.etcdClient)
 	//删除租户

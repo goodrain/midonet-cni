@@ -5,8 +5,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/coreos/etcd/client"
+	"github.com/coreos/etcd/clientv3"
+
 	"golang.org/x/net/context"
 
+	"fmt"
 	"path"
 
 	"io/ioutil"
@@ -17,19 +21,8 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/barnettzqg/golang-midonetclient/types"
-	"github.com/coreos/etcd/client"
 	"github.com/goodrain/midonet-cni/pkg/util"
 )
-
-// Policy is a struct to hold policy config (which currently happens to also contain some K8s config)
-type Policy struct {
-	PolicyType              string `json:"type"`
-	K8sAPIRoot              string `json:"k8s_api_root"`
-	K8sAuthToken            string `json:"k8s_auth_token"`
-	K8sClientCertificate    string `json:"k8s_client_certificate"`
-	K8sClientKey            string `json:"k8s_client_key"`
-	K8sCertificateAuthority string `json:"k8s_certificate_authority"`
-}
 
 // Kubernetes a K8s specific struct to hold config
 type Kubernetes struct {
@@ -49,11 +42,8 @@ type Options struct {
 	MidoNetBridgeCIDR string               `json:"midonet_bridge_cidr"`
 	IPAM              IPAM                 `json:"ipam"`
 	MTU               int                  `json:"mtu"`
-	Policy            Policy               `json:"policy"`
-	Kubernetes        Kubernetes           `json:"kubernetes"`
 	VethCtrlType      string               `json:"veth_ctrl_type"`
 	MidoNetAPIConf    types.MidoNetAPIConf `json:"midonet_api"`
-	CNIType           string               `json:"cni_type"`
 	ETCDConf          ETCDConf             `json:"etcd_conf"`
 	Log               *logrus.Entry
 }
@@ -158,40 +148,36 @@ func (c *Options) Default() error {
 			return err
 		}
 	}
-	//get midonet api config from etcd
-	if c.MidoNetAPIConf.URL == "" {
-		etcdClient, err := createETCDClient(c.ETCDConf)
+	//get midonet api endpoint from etcd
+	var getEndpoint = func() []string {
+		client, err := CreateETCDV3Client(c.ETCDConf)
 		if err != nil {
-			return err
+			return nil
 		}
-		response, err := client.NewKeysAPI(etcdClient).Get(context.Background(), "/midonet-cni/config/midonet-api", &client.GetOptions{})
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		res, err := client.Get(ctx, fmt.Sprintf("/traefik/backends/rbd_midonet_api/servers"), clientv3.WithPrefix())
 		if err != nil {
-			return errors.New("Find midonet api config from etcd error." + err.Error())
+			logrus.Errorf("list all servers of %s error.%s", "rbd_midonet_api", err.Error())
+			return nil
 		}
-		value := response.Node.Value
-		var con types.MidoNetAPIConf
-		err = json.Unmarshal([]byte(value), &con)
-		if err != nil {
-			return errors.New("Find midonet api config from etcd error." + err.Error())
+		if res.Count == 0 {
+			return nil
 		}
-		c.MidoNetAPIConf = con
+		var endpoints []string
+		for _, kv := range res.Kvs {
+			if strings.HasSuffix(string(kv.Key), "/url") { //获取服务地址
+				kstep := strings.Split(string(kv.Key), "/")
+				if len(kstep) > 2 {
+					serverURL := string(kv.Value)
+					endpoints = append(endpoints, serverURL)
+				}
+			}
+		}
+		return endpoints
 	}
-	if c.Kubernetes.K8sAPIRoot == "" {
-		etcdClient, err := createETCDClient(c.ETCDConf)
-		if err != nil {
-			return err
-		}
-		response, err := client.NewKeysAPI(etcdClient).Get(context.Background(), "/midonet-cni/config/kubernetes", &client.GetOptions{})
-		if err != nil {
-			return errors.New("Find kubernetes api config from etcd error." + err.Error())
-		}
-		value := response.Node.Value
-		var kube Kubernetes
-		err = json.Unmarshal([]byte(value), &kube)
-		if err != nil {
-			return errors.New("Find kubernetes api config from etcd error." + err.Error())
-		}
-		c.Kubernetes = kube
+	if endpoints := getEndpoint(); endpoints != nil && len(endpoints) > 0 {
+		c.MidoNetAPIConf.URL = endpoints
 	}
 	//如果etcd中有定义route，获取它
 	if c.IPAM.Route == nil || len(c.IPAM.Route) == 0 {
@@ -222,7 +208,31 @@ type ETCDConf struct {
 	PeerTimeOut string   `json:"timeout"`
 }
 
-//createETCDClient 创建etcd客户端
+//CreateETCDV3Client create  etcd v3 client
+func CreateETCDV3Client(conf ETCDConf) (*clientv3.Client, error) {
+	var timeout time.Duration
+	if conf.PeerTimeOut != "" {
+		var err error
+		timeout, err = time.ParseDuration(conf.PeerTimeOut)
+		if err != nil {
+			timeout = time.Second
+		}
+	}
+
+	cfg := clientv3.Config{
+		Endpoints:   conf.URLs,
+		Username:    conf.Username,
+		Password:    conf.Password,
+		DialTimeout: timeout,
+	}
+	c, err := clientv3.New(cfg)
+	if err != nil {
+		logrus.Error("Create etcd client error,", err.Error())
+		return nil, err
+	}
+	return c, nil
+}
+
 func createETCDClient(conf ETCDConf) (client.Client, error) {
 	var timeout time.Duration
 	if conf.PeerTimeOut != "" {

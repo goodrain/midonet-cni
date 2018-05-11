@@ -9,13 +9,13 @@ import (
 
 //MidoNetAPIConf 配置
 type MidoNetAPIConf struct {
-	URL              string       `json:"url"`
-	UserName         string       `json:"user_name"`
-	PassWord         string       `json:"password"`
-	ProjectID        string       `json:"project_id"`
-	ProviderRouterID string       `json:"provider_router_id"`
-	Version          int          `json:"version"`
-	KeystoneConf     KeystoneConf `json:"keystone_conf"`
+	URL              []string `json:"url"`
+	UserName         string   `json:"user_name"`
+	PassWord         string   `json:"password"`
+	ProjectID        string   `json:"project_id"`
+	ProviderRouterID string   `json:"provider_router_id"`
+	Version          int      `json:"version"`
+	//KeystoneConf     KeystoneConf `json:"keystone_conf"`
 }
 
 //KeystoneConf keystone_conf

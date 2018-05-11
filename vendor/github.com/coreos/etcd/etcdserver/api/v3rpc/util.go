@@ -35,13 +35,13 @@ func togRPCError(err error) error {
 		return rpctypes.ErrGRPCMemberExist
 	case membership.ErrPeerURLexists:
 		return rpctypes.ErrGRPCPeerURLExist
+	case etcdserver.ErrNotEnoughStartedMembers:
+		return rpctypes.ErrMemberNotEnoughStarted
 
 	case mvcc.ErrCompacted:
 		return rpctypes.ErrGRPCCompacted
 	case mvcc.ErrFutureRev:
 		return rpctypes.ErrGRPCFutureRev
-	case lease.ErrLeaseNotFound:
-		return rpctypes.ErrGRPCLeaseNotFound
 	case etcdserver.ErrRequestTooLarge:
 		return rpctypes.ErrGRPCRequestTooLarge
 	case etcdserver.ErrNoSpace:
@@ -57,8 +57,12 @@ func togRPCError(err error) error {
 		return rpctypes.ErrGRPCTimeout
 	case etcdserver.ErrTimeoutDueToLeaderFail:
 		return rpctypes.ErrGRPCTimeoutDueToLeaderFail
+	case etcdserver.ErrTimeoutDueToConnectionLost:
+		return rpctypes.ErrGRPCTimeoutDueToConnectionLost
 	case etcdserver.ErrUnhealthy:
 		return rpctypes.ErrGRPCUnhealthy
+	case etcdserver.ErrKeyNotFound:
+		return rpctypes.ErrGRPCKeyNotFound
 
 	case lease.ErrLeaseNotFound:
 		return rpctypes.ErrGRPCLeaseNotFound
@@ -89,6 +93,10 @@ func togRPCError(err error) error {
 		return rpctypes.ErrGRPCPermissionNotGranted
 	case auth.ErrAuthNotEnabled:
 		return rpctypes.ErrGRPCAuthNotEnabled
+	case auth.ErrInvalidAuthToken:
+		return rpctypes.ErrGRPCInvalidAuthToken
+	case auth.ErrInvalidAuthMgmt:
+		return rpctypes.ErrGRPCInvalidAuthMgmt
 	default:
 		return grpc.Errorf(codes.Unknown, err.Error())
 	}
