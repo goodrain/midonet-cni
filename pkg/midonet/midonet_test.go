@@ -13,16 +13,12 @@ func TestGetTenant(t *testing.T) {
 		MidoNetRouterCIDR: "172.16.0.0/24",
 		MidoNetBridgeCIDR: "192.168.0.0/30",
 		MidoNetAPIConf: midonettypes.MidoNetAPIConf{
-			URL:              "http://127.0.0.1:8080/midonet-api",
+			URL:              []string{"http://127.0.0.1:8080"},
 			UserName:         "admin",
 			PassWord:         "6bJslp7jBs",
 			ProjectID:        "admin",
 			ProviderRouterID: "a25f9dc3-4e62-459d-91b1-bbb68a8a46e5",
-			KeystoneConf: midonettypes.KeystoneConf{
-				URL:   "http://127.0.0.1:35357/v2.0",
-				Token: "0897e7b78686feb934ff",
-			},
-			Version: 1,
+			Version:          1,
 		},
 		ETCDConf: types.ETCDConf{
 			URLs: []string{"http://server1:2379"},
@@ -45,16 +41,12 @@ func TestCreateNewBridge(t *testing.T) {
 		MidoNetRouterCIDR: "172.16.0.0/24",
 		MidoNetBridgeCIDR: "192.168.0.0/30",
 		MidoNetAPIConf: midonettypes.MidoNetAPIConf{
-			URL:              "http://127.0.0.1:8080/midonet-api",
+			URL:              []string{"http://127.0.0.1:8080"},
 			UserName:         "admin",
 			PassWord:         "6bJslp7jBs",
 			ProjectID:        "admin",
 			ProviderRouterID: "a25f9dc3-4e62-459d-91b1-bbb68a8a46e5",
-			KeystoneConf: midonettypes.KeystoneConf{
-				URL:   "http://127.0.0.1:35357/v2.0",
-				Token: "0897e7b78686feb934ff",
-			},
-			Version: 1,
+			Version:          1,
 		},
 		ETCDConf: types.ETCDConf{
 			URLs: []string{"http://server1:2379"},

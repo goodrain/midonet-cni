@@ -15,7 +15,7 @@ func (c *Client) GetRouters(tenantID string) []*types.Router {
 	if tenantID == "" {
 		return nil
 	}
-	request, err := http.NewRequest("GET", c.apiConf.URL+fmt.Sprintf("/routers?tenant_id=%s", tenantID), nil)
+	request, err := http.NewRequest("GET", c.getURL()+fmt.Sprintf("/routers?tenant_id=%s", tenantID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client get routers request error.", err.Error())
 		return nil
@@ -44,7 +44,7 @@ func (c *Client) GetBridges(tenantID string) []*types.Bridge {
 	if tenantID == "" {
 		return nil
 	}
-	request, err := http.NewRequest("GET", c.apiConf.URL+fmt.Sprintf("/bridges?tenant_id=%s", tenantID), nil)
+	request, err := http.NewRequest("GET", c.getURL()+fmt.Sprintf("/bridges?tenant_id=%s", tenantID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client get bridges request error.", err.Error())
 		return nil
@@ -73,7 +73,7 @@ func (c *Client) GetChain(tenantID string) []*types.Chain {
 	if tenantID == "" {
 		return nil
 	}
-	request, err := http.NewRequest("GET", c.apiConf.URL+fmt.Sprintf("/chains?tenant_id=%s", tenantID), nil)
+	request, err := http.NewRequest("GET", c.getURL()+fmt.Sprintf("/chains?tenant_id=%s", tenantID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client get chains request error.", err.Error())
 		return nil
@@ -102,7 +102,7 @@ func (c *Client) GetPortByRouter(routerID string) []*types.RouterPort {
 	if routerID == "" {
 		return nil
 	}
-	request, err := http.NewRequest("GET", c.apiConf.URL+fmt.Sprintf("/routers/%s/ports", routerID), nil)
+	request, err := http.NewRequest("GET", c.getURL()+fmt.Sprintf("/routers/%s/ports", routerID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client get ports request error.", err.Error())
 		return nil
@@ -131,7 +131,7 @@ func (c *Client) GetPeerPortByRouter(routerID string) []*types.RouterPort {
 	if routerID == "" {
 		return nil
 	}
-	request, err := http.NewRequest("GET", c.apiConf.URL+fmt.Sprintf("/routers/%s/peer_ports", routerID), nil)
+	request, err := http.NewRequest("GET", c.getURL()+fmt.Sprintf("/routers/%s/peer_ports", routerID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client get ports request error.", err.Error())
 		return nil
@@ -160,7 +160,7 @@ func (c *Client) GetPortByBridge(routerID string) []*types.BridgePort {
 	if routerID == "" {
 		return nil
 	}
-	request, err := http.NewRequest("GET", c.apiConf.URL+fmt.Sprintf("/bridges/%s/ports", routerID), nil)
+	request, err := http.NewRequest("GET", c.getURL()+fmt.Sprintf("/bridges/%s/ports", routerID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client get ports request error.", err.Error())
 		return nil
@@ -189,7 +189,7 @@ func (c *Client) GetRoutes(routerID string) []*types.Route {
 	if routerID == "" {
 		return nil
 	}
-	request, err := http.NewRequest("GET", c.apiConf.URL+fmt.Sprintf("/routers/%s/routes", routerID), nil)
+	request, err := http.NewRequest("GET", c.getURL()+fmt.Sprintf("/routers/%s/routes", routerID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client get routes request error.", err.Error())
 		return nil
@@ -218,7 +218,7 @@ func (c *Client) GetRuleByChain(chainID string) []*types.Rule {
 	if chainID == "" {
 		return nil
 	}
-	request, err := http.NewRequest("GET", c.apiConf.URL+fmt.Sprintf("/chains/%s/rules", chainID), nil)
+	request, err := http.NewRequest("GET", c.getURL()+fmt.Sprintf("/chains/%s/rules", chainID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client get rules request error.", err.Error())
 		return nil

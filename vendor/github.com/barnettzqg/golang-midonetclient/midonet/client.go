@@ -22,6 +22,7 @@ type Client struct {
 	mediaV5Map map[string]string
 	apiConf    types.MidoNetAPIConf
 	token      types.Token
+	endpoints  map[string]int
 	version    int
 }
 
@@ -31,12 +32,18 @@ func NewClient(conf *types.MidoNetAPIConf) (*Client, error) {
 		return nil, fmt.Errorf("midonet api conf can not be nil")
 	}
 	c := *conf
-	client := &Client{}
+	client := &Client{
+		endpoints: make(map[string]int, len(c.URL)),
+	}
 	if conf.Version != 0 {
 		logrus.Infof("Midonet api version %d", conf.Version)
 		client.version = conf.Version
 	} else {
 		client.version = 1
+	}
+	for i := range c.URL {
+		c.URL[i] = c.URL[i] + "/midonet-api"
+		client.endpoints[c.URL[i]] = 0
 	}
 	client.apiConf = c
 	client.mediaV1Map = map[string]string{
@@ -64,6 +71,16 @@ func NewClient(conf *types.MidoNetAPIConf) (*Client, error) {
 	}
 
 	return client, nil
+}
+func (c *Client) getURL() string {
+	var endpoint string
+	var errcount int
+	for k, v := range c.endpoints {
+		if v <= errcount {
+			endpoint = k
+		}
+	}
+	return endpoint
 }
 func (c *Client) getMedia(key string) string {
 	if c.version == 1 {
@@ -117,7 +134,7 @@ func (c *Client) resultErr(res *http.Response) error {
 
 //login 登陆
 func (c *Client) login() error {
-	request, err := http.NewRequest("POST", c.apiConf.URL+"/login", nil)
+	request, err := http.NewRequest("POST", c.getURL()+"/login", nil)
 	if err != nil {
 		logrus.Errorln("midonet client create login request error.", err.Error())
 		return err
@@ -154,7 +171,7 @@ func (c *Client) CreateBridge(bridge *types.Bridge) error {
 		return err
 	}
 	logrus.Info("create bridge:", string(postData))
-	request, err := http.NewRequest("POST", c.apiConf.URL+"/bridges", bytes.NewReader(postData))
+	request, err := http.NewRequest("POST", c.getURL()+"/bridges", bytes.NewReader(postData))
 	if err != nil {
 		logrus.Errorln("midonet client create post bridge request error.", err.Error())
 		return err
@@ -176,7 +193,7 @@ func (c *Client) DeleteBridges(bridgeID *types.UUID) error {
 	if bridgeID == nil {
 		return fmt.Errorf("bridge id can not be empty where delete bridge")
 	}
-	request, err := http.NewRequest("DELETE", c.apiConf.URL+"/bridges/"+bridgeID.String(), nil)
+	request, err := http.NewRequest("DELETE", c.getURL()+"/bridges/"+bridgeID.String(), nil)
 	if err != nil {
 		logrus.Errorln("midonet client create delete bridge request error.", err.Error())
 		return err
@@ -207,7 +224,7 @@ func (c *Client) CreateBridgePort(bridgePort *types.BridgePort) error {
 		logrus.Error("Marshal bridge data error,", err.Error())
 		return err
 	}
-	request, err := http.NewRequest("POST", c.apiConf.URL+fmt.Sprintf("/bridges/%s/ports", bridgePort.DeviceID), bytes.NewReader(postData))
+	request, err := http.NewRequest("POST", c.getURL()+fmt.Sprintf("/bridges/%s/ports", bridgePort.DeviceID), bytes.NewReader(postData))
 	if err != nil {
 		logrus.Errorln("midonet client create post bridge port request error.", err.Error())
 		return err
@@ -237,7 +254,7 @@ func (c *Client) CreateRouterPort(routerPort *types.RouterPort) error {
 		logrus.Error("Marshal router port data error,", err.Error())
 		return err
 	}
-	request, err := http.NewRequest("POST", c.apiConf.URL+fmt.Sprintf("/routers/%s/ports", routerPort.DeviceID), bytes.NewReader(postData))
+	request, err := http.NewRequest("POST", c.getURL()+fmt.Sprintf("/routers/%s/ports", routerPort.DeviceID), bytes.NewReader(postData))
 	if err != nil {
 		logrus.Errorln("midonet client create post router port  request error.", err.Error())
 		return err
@@ -259,7 +276,7 @@ func (c *Client) DeletePort(portID *types.UUID) error {
 	if portID == nil {
 		return fmt.Errorf("port id can not be empty where delete port")
 	}
-	request, err := http.NewRequest("DELETE", c.apiConf.URL+"/ports/"+portID.String(), nil)
+	request, err := http.NewRequest("DELETE", c.getURL()+"/ports/"+portID.String(), nil)
 	if err != nil {
 		logrus.Errorln("midonet client create delete port request error.", err.Error())
 		return err
@@ -287,7 +304,7 @@ func (c *Client) CreatePortLink(link *types.PortLink) error {
 	}
 	portID := link.PortID
 	postData := []byte(fmt.Sprintf(`{"peerId":"%s"}`, link.PeerID.String()))
-	request, err := http.NewRequest("POST", c.apiConf.URL+fmt.Sprintf("/ports/%s/link", portID.String()), bytes.NewReader(postData))
+	request, err := http.NewRequest("POST", c.getURL()+fmt.Sprintf("/ports/%s/link", portID.String()), bytes.NewReader(postData))
 	if err != nil {
 		logrus.Errorln("midonet client create post  port link  request error.", err.Error())
 		return err
@@ -309,7 +326,7 @@ func (c *Client) DeletePortLink(portID *types.UUID) error {
 	if portID == nil {
 		return errors.New("delete port link port id can not be empty")
 	}
-	request, err := http.NewRequest("DELETE", c.apiConf.URL+fmt.Sprintf("/ports/%s/link", portID.String()), nil)
+	request, err := http.NewRequest("DELETE", c.getURL()+fmt.Sprintf("/ports/%s/link", portID.String()), nil)
 	if err != nil {
 		logrus.Errorln("midonet client delete  port link  request error.", err.Error())
 		return err
@@ -336,7 +353,7 @@ func (c *Client) CreateRouter(router *types.Router) error {
 		logrus.Error("Marshal router data error,", err.Error())
 		return err
 	}
-	request, err := http.NewRequest("POST", c.apiConf.URL+"/routers", bytes.NewReader(postData))
+	request, err := http.NewRequest("POST", c.getURL()+"/routers", bytes.NewReader(postData))
 	if err != nil {
 		logrus.Errorln("midonet client create post router request error.", err.Error())
 		return err
@@ -359,7 +376,7 @@ func (c *Client) DeleteRouter(routerID *types.UUID) error {
 	if routerID == nil {
 		return fmt.Errorf("router id can not be empty where delete chain")
 	}
-	request, err := http.NewRequest("DELETE", c.apiConf.URL+fmt.Sprintf("/routers/%s", routerID), nil)
+	request, err := http.NewRequest("DELETE", c.getURL()+fmt.Sprintf("/routers/%s", routerID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client create delete router request error.", err.Error())
 		return err
@@ -389,7 +406,7 @@ func (c *Client) CreateRoute(route *types.Route) error {
 		logrus.Error("Marshal route data error,", err.Error())
 		return err
 	}
-	request, err := http.NewRequest("POST", c.apiConf.URL+fmt.Sprintf("/routers/%s/routes", route.RouterID), bytes.NewReader(postData))
+	request, err := http.NewRequest("POST", c.getURL()+fmt.Sprintf("/routers/%s/routes", route.RouterID), bytes.NewReader(postData))
 	if err != nil {
 		logrus.Errorln("midonet client create route request error.", err.Error())
 		return err
@@ -416,9 +433,9 @@ func (c *Client) DeleteRoute(routerID, routeID *types.UUID) error {
 	}
 	var path string
 	if c.version == 5 {
-		path = c.apiConf.URL + fmt.Sprintf("/routes/%s", routeID)
+		path = c.getURL() + fmt.Sprintf("/routes/%s", routeID)
 	} else {
-		path = c.apiConf.URL + fmt.Sprintf("/routers/%s/routes/%s", routerID, routeID)
+		path = c.getURL() + fmt.Sprintf("/routers/%s/routes/%s", routerID, routeID)
 	}
 	request, err := http.NewRequest("DELETE", path, nil)
 	if err != nil {
@@ -450,7 +467,7 @@ func (c *Client) CreateChain(chain *types.Chain) error {
 		logrus.Error("Marshal chain data error,", err.Error())
 		return err
 	}
-	request, err := http.NewRequest("POST", c.apiConf.URL+"/chains", bytes.NewReader(postData))
+	request, err := http.NewRequest("POST", c.getURL()+"/chains", bytes.NewReader(postData))
 	if err != nil {
 		logrus.Errorln("midonet client create post chain request error.", err.Error())
 		return err
@@ -472,7 +489,7 @@ func (c *Client) DeleteChain(chainID *types.UUID) error {
 	if chainID == nil {
 		return fmt.Errorf("chain id can not be empty where delete chain")
 	}
-	request, err := http.NewRequest("DELETE", c.apiConf.URL+fmt.Sprintf("/chains/%s", chainID), nil)
+	request, err := http.NewRequest("DELETE", c.getURL()+fmt.Sprintf("/chains/%s", chainID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client create delete chain request error.", err.Error())
 		return err
@@ -502,7 +519,7 @@ func (c *Client) CreateRule(rule *types.Rule) error {
 		logrus.Error("Marshal rule data error,", err.Error())
 		return err
 	}
-	request, err := http.NewRequest("POST", c.apiConf.URL+fmt.Sprintf("/chains/%s/rules", rule.ChainID), bytes.NewReader(postData))
+	request, err := http.NewRequest("POST", c.getURL()+fmt.Sprintf("/chains/%s/rules", rule.ChainID), bytes.NewReader(postData))
 	if err != nil {
 		logrus.Errorln("midonet client create post rule request error.", err.Error())
 		return err
@@ -525,7 +542,7 @@ func (c *Client) DeleteRule(ruleID *types.UUID) error {
 		return fmt.Errorf("rule id can not e empty when delete rule")
 	}
 
-	request, err := http.NewRequest("DELETE", c.apiConf.URL+fmt.Sprintf("/rules/%s", ruleID), nil)
+	request, err := http.NewRequest("DELETE", c.getURL()+fmt.Sprintf("/rules/%s", ruleID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client delete rule request error.", err.Error())
 		return err
@@ -558,7 +575,7 @@ func (c *Client) BindingInterface(bindingInfo *types.HostInterfacePort) error {
 		logrus.Error("Marshal bindingInfo data error,", err.Error())
 		return err
 	}
-	request, err := http.NewRequest("POST", c.apiConf.URL+fmt.Sprintf("/hosts/%s/ports", bindingInfo.HostID), bytes.NewReader(postData))
+	request, err := http.NewRequest("POST", c.getURL()+fmt.Sprintf("/hosts/%s/ports", bindingInfo.HostID), bytes.NewReader(postData))
 	if err != nil {
 		logrus.Errorln("midonet client create post binding interface request error.", err.Error())
 		return err
@@ -587,7 +604,7 @@ func (c *Client) DeleteBinding(bindingInfo *types.HostInterfacePort) error {
 		return fmt.Errorf("interface name can not be empty where delete binding interface")
 	}
 
-	request, err := http.NewRequest("DELETE", c.apiConf.URL+fmt.Sprintf("/hosts/%s/ports/%s", bindingInfo.HostID, bindingInfo.PortID), nil)
+	request, err := http.NewRequest("DELETE", c.getURL()+fmt.Sprintf("/hosts/%s/ports/%s", bindingInfo.HostID, bindingInfo.PortID), nil)
 	if err != nil {
 		logrus.Errorln("midonet client create delete binding interface request error.", err.Error())
 		return err
@@ -606,65 +623,67 @@ func (c *Client) DeleteBinding(bindingInfo *types.HostInterfacePort) error {
 
 //CreateTenant 创建租户
 func (c *Client) CreateTenant(tenant *types.Tenant) error {
-	if tenant.ID == "" {
-		return fmt.Errorf("Tenant id can not be empty where create tenant")
-	}
-	postStruct := map[string]*types.Tenant{
-		"tenant": tenant,
-	}
-	postData, err := json.Marshal(postStruct)
-	if err != nil {
-		logrus.Error("Marshal tenant data error,", err.Error())
-		return err
-	}
-	logrus.Info("Create tenant:", string(postData))
-	request, err := http.NewRequest("POST", c.apiConf.KeystoneConf.URL+"/tenants", bytes.NewReader(postData))
-	if err != nil {
-		logrus.Errorln("midonet client create post bridge request error.", err.Error())
-		return err
-	}
-	request.Header.Add("X-Auth-Token", c.apiConf.KeystoneConf.Token)
-	request.Header.Add("Connection", "keep-alive")
-	request.Header.Add("content-type", "application/json")
-	res, err := c.getHTTPClient().Do(request)
-	if err != nil {
-		logrus.Error("Create tenant error.", err.Error())
-		return err
-	}
-	logrus.Info("Create tenant", res)
-	if res.StatusCode/100 == 2 {
-		return nil
-	}
-	return c.resultErr(res)
+	// if tenant.ID == "" {
+	// 	return fmt.Errorf("Tenant id can not be empty where create tenant")
+	// }
+	// postStruct := map[string]*types.Tenant{
+	// 	"tenant": tenant,
+	// }
+	// postData, err := json.Marshal(postStruct)
+	// if err != nil {
+	// 	logrus.Error("Marshal tenant data error,", err.Error())
+	// 	return err
+	// }
+	// logrus.Info("Create tenant:", string(postData))
+	// request, err := http.NewRequest("POST", c.apiConf.KeystoneConf.URL+"/tenants", bytes.NewReader(postData))
+	// if err != nil {
+	// 	logrus.Errorln("midonet client create post bridge request error.", err.Error())
+	// 	return err
+	// }
+	// request.Header.Add("X-Auth-Token", c.apiConf.KeystoneConf.Token)
+	// request.Header.Add("Connection", "keep-alive")
+	// request.Header.Add("content-type", "application/json")
+	// res, err := c.getHTTPClient().Do(request)
+	// if err != nil {
+	// 	logrus.Error("Create tenant error.", err.Error())
+	// 	return err
+	// }
+	// logrus.Info("Create tenant", res)
+	// if res.StatusCode/100 == 2 {
+	// 	return nil
+	// }
+	// return c.resultErr(res)
+	return nil
 }
 
 //DeleteTenant 删除租户
 func (c *Client) DeleteTenant(tenantID string, all bool) error {
-	if all {
-		err := c.deleteAll(tenantID)
-		if err != nil {
-			logrus.Error("delete tenant all info error.", err.Error())
-		}
-	}
-	if tenantID == "" {
-		return fmt.Errorf("Tenant id can not be empty where delete tenant")
-	}
-	request, err := http.NewRequest("DELETE", c.apiConf.KeystoneConf.URL+"/tenants/"+tenantID, nil)
-	if err != nil {
-		logrus.Errorln("midonet client create delete tenant request error.", err.Error())
-		return err
-	}
-	request.Header.Add("X-Auth-Token", c.apiConf.KeystoneConf.Token)
-	request.Header.Add("Connection", "keep-alive")
-	res, err := c.getHTTPClient().Do(request)
-	if err != nil {
-		logrus.Error("Delete tenant error.", err.Error())
-		return err
-	}
-	if res.StatusCode/100 == 2 {
-		return nil
-	}
-	return c.resultErr(res)
+	// if all {
+	// 	err := c.deleteAll(tenantID)
+	// 	if err != nil {
+	// 		logrus.Error("delete tenant all info error.", err.Error())
+	// 	}
+	// }
+	// if tenantID == "" {
+	// 	return fmt.Errorf("Tenant id can not be empty where delete tenant")
+	// }
+	// request, err := http.NewRequest("DELETE", c.apiConf.KeystoneConf.URL+"/tenants/"+tenantID, nil)
+	// if err != nil {
+	// 	logrus.Errorln("midonet client create delete tenant request error.", err.Error())
+	// 	return err
+	// }
+	// request.Header.Add("X-Auth-Token", c.apiConf.KeystoneConf.Token)
+	// request.Header.Add("Connection", "keep-alive")
+	// res, err := c.getHTTPClient().Do(request)
+	// if err != nil {
+	// 	logrus.Error("Delete tenant error.", err.Error())
+	// 	return err
+	// }
+	// if res.StatusCode/100 == 2 {
+	// 	return nil
+	// }
+	// return c.resultErr(res)
+	return nil
 }
 
 func (c *Client) deleteAll(tenantID string) error {
