@@ -41,6 +41,7 @@ func (u *UUID) String() string {
 
 //String2UUID string 转 uuid
 func String2UUID(data string) (*UUID, error) {
+	data = strings.TrimSpace(data)
 	u, err := uuid.Parse(data)
 	if err != nil {
 		return nil, err

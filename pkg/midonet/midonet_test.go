@@ -64,3 +64,21 @@ func TestCreateNewBridge(t *testing.T) {
 	}
 
 }
+
+func TestUUID(t *testing.T) {
+	bridgeID := "5eb95bd1-919b-4ac1-bf6a-81bbdcaa947e"
+	//hostID := "4202d021-20af-8b83-a249-e7a9a7e6573f"
+	oldxxx := " a134eab8-3d42-40f5-84a5-fcf2b7a44b31"
+	_, err := midonettypes.String2UUID(bridgeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// _, err = midonettypes.String2UUID(hostID)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	_, err = midonettypes.String2UUID(oldxxx)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

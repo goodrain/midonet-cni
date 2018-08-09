@@ -723,6 +723,7 @@ func (m *Manager) Bingding(ifName, tenantID, containerID string) error {
 		log.Error("Get the used bridge to etcd error.", err.Error())
 		return err
 	}
+	log.Infoln(res.Node.Value, " ", m.conf.MidoNetHostUUID)
 	bridgeID, err := midonettypes.String2UUID(res.Node.Value)
 	if err != nil {
 		return err
